@@ -1,7 +1,6 @@
 import sublime
 import sublime_plugin
 import json
-import time
 
 from .gotools_util import Buffers
 from .gotools_util import GoBuffers
@@ -77,8 +76,6 @@ class GotoolsSuggestions(sublime_plugin.EventListener):
       args, _ = _lex_func_type(json["type"])
       snippets = ["${{{0}:{1}}}".format(n + 1, arg.split(' ', 1)[0]) for n, arg in enumerate(args)]
       completion += '(' + ', '.join(snippets) + ')'
-
-    print(json, completion)
 
     label = '{0: <30.30} {1: <40.40} {2}'.format(
       json["name"],
