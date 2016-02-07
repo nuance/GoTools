@@ -30,6 +30,12 @@ class Buffers():
     return (Buffers.offset_at_row_col(view, begin_row, begin_col), Buffers.offset_at_row_col(view, end_row, end_col))
 
   @staticmethod
+  def symbol_offset_at_cursor(view):
+    row, col = view.rowcol(view.word(view.sel()[0]).end())
+
+    return Buffers.offset_at_row_col(view, row,col)
+
+  @staticmethod
   def location_at_cursor(view):
     row, col = view.rowcol(view.sel()[0].begin())
     offsets = Buffers.offset_at_cursor(view)
