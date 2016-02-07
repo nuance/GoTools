@@ -126,6 +126,7 @@ class ToolRunner():
       stderr = stderr.decode("utf-8")
       if len(stderr) > 0:
         Logger.log("stderr:\n{0}".format(stderr))
-      return stdout.decode("utf-8"), stderr, p.returncode
+      x = stdout.decode("utf-8"), stderr, p.returncode
+      return x
     except subprocess.CalledProcessError as e:
       raise
