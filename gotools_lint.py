@@ -19,9 +19,9 @@ class GotoolsLintOnSave(sublime_plugin.EventListener):
         view.run_command('gotools_lint')
 
 LINTERS = [
-    # ('go', ['install', '-v'], "^(.*):(\d+):(\d+):(.*)$", lambda ll: ll['rc'] == 1, lambda stderr, stdout: stderr),
-    ('go', ['vet'], "^(.*):(\d+):(.*)$", lambda ll: ll['rc'] == 1, lambda stderr, stdout: stderr),
-    ('golint', [], "^(.*):(\d+):(\d+):(.*)$", lambda ll: len(ll['stdout']) > 0, lambda stderr, stdout: stdout),
+    # ('go', ['install', '-v'], "^(.*\.go):(\d+):(\d+):(.*)$", lambda ll: ll['rc'] == 1, lambda stderr, stdout: stderr),
+    ('go', ['vet'], "^(.*\.go):(\d+):(.*)$", lambda ll: ll['rc'] == 1, lambda stderr, stdout: stderr),
+    ('golint', [], "^(.*\.go):(\d+):(\d+):(.*)$", lambda ll: len(ll['stdout']) > 0, lambda stderr, stdout: stdout),
 ]
 
 
@@ -42,13 +42,13 @@ class GotoolsLint(sublime_plugin.TextCommand):
 
         if failure_test(locals()):
             # Show syntax errors and bail
-            self.show_syntax_errors(failures(stderr, stdout), file_regex)
+            self.show_syntax_errors('## {0} ##'.format(' '.join([cmd] + args)), failures(stderr, stdout), file_regex)
             return True
 
         # Everything's good, hide the syntax error panel
         self.view.window().run_command("hide_panel", {"panel": "output.gotools_lint_errors"})
 
-    def show_syntax_errors(self, stderr, file_regex):
+    def show_syntax_errors(self, header, stderr, file_regex):
         """Display an output panel containing the syntax errors, and set gutter marks for each error."""
         output_view = self.view.window().create_output_panel('gotools_lint_errors')
         output_view.set_scratch(True)
@@ -56,12 +56,25 @@ class GotoolsLint(sublime_plugin.TextCommand):
         output_view.run_command("select_all")
         output_view.run_command("right_delete")
 
-        syntax_output = stderr.replace(os.path.basename(self.view.file_name()), self.view.file_name())
-        output_view.run_command('append', {'characters': syntax_output})
+        file_name = os.path.basename(self.view.file_name())
+        dir_name = os.path.dirname(self.view.file_name())
+
+        lines = []
+        for line in stderr.split('\n'):
+            m = re.search(file_regex, line)
+            if m:
+                line = os.path.join(dir_name, line)
+            lines.append(line)
+
+        syntax_output = '\n'.join(lines)
+        output_view.run_command('append', {'characters': header + '\n' + syntax_output})
         self.view.window().run_command("show_panel", {"panel": "output.gotools_lint_errors"})
 
         marks = []
         for error in stderr.splitlines():
+            if file_name not in error:
+                continue
+
             match = re.match(file_regex, error)
             if not match or not match.group(2):
                 Logger.log("skipping unrecognizable error:\n" + error + "\nmatch:" + str(match))
