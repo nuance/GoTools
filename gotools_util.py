@@ -84,7 +84,7 @@ class Logger():
 
 class ToolRunner():
   @staticmethod
-  def run(tool, args=[], stdin=None, timeout=5):
+  def run(tool, args=[], stdin=None, timeout=5, cwd=None):
     toolpath = None
     searchpaths = list(map(lambda x: os.path.join(x, 'bin'), GoToolsSettings.get().gopath.split(os.pathsep)))
     for p in GoToolsSettings.get().ospath.split(os.pathsep):
@@ -124,7 +124,7 @@ class ToolRunner():
         si.dwFlags |= subprocess.STARTF_USESHOWWINDOW
 
       start = time.time()
-      p = subprocess.Popen(cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=env, startupinfo=si)
+      p = subprocess.Popen(cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=env, startupinfo=si, cwd=cwd)
       stdout, stderr = p.communicate(input=stdin, timeout=timeout)
       p.wait(timeout=timeout)
       elapsed = round(time.time() - start)
