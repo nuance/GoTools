@@ -16,7 +16,7 @@ class GotoolsLintOnSave(sublime_plugin.EventListener):
             return
         if not GoToolsSettings.get().lint_on_save:
             return
-        view.run_command('gotools_lint')
+        view.run_command('gotools_lint', False)
 
 LINTERS = [
     # ('go', ['install', '-v'], "^(.*\.go):(\d+):(\d+):(.*)$", lambda ll: ll['rc'] == 1, lambda stderr, stdout: stderr),
@@ -29,11 +29,11 @@ class GotoolsLint(sublime_plugin.TextCommand):
     def is_enabled(self):
         return GoBuffers.is_go_source(self.view)
 
-    def run(self, edit):
+    def run(self, edit, include_other_files=True):
         for l in LINTERS:
-            self._run_cmd_or_fail(*l)
+            self._run_cmd_or_fail(*l, **{'include_other_files': include_other_files})
 
-    def _run_cmd_or_fail(self, cmd, args, file_regex, failure_test, failures):
+    def _run_cmd_or_fail(self, cmd, args, file_regex, failure_test, failures, include_other_files):
         path = os.path.dirname(self.view.file_name())
         stdout, stderr, rc = ToolRunner.run(cmd, args, cwd=path)
 
@@ -42,13 +42,15 @@ class GotoolsLint(sublime_plugin.TextCommand):
 
         if failure_test(locals()):
             # Show syntax errors and bail
-            self.show_syntax_errors('## {0} ##'.format(' '.join([cmd] + args)), failures(stderr, stdout), file_regex)
-            return True
+            return self.show_syntax_errors('## {0} ##'.format(' '.join([cmd] + args)),
+                                           failures(stderr, stdout),
+                                           file_regex,
+                                           include_other_files)
 
         # Everything's good, hide the syntax error panel
         self.view.window().run_command("hide_panel", {"panel": "output.gotools_lint_errors"})
 
-    def show_syntax_errors(self, header, stderr, file_regex):
+    def show_syntax_errors(self, header, stderr, file_regex, include_other_files):
         """Display an output panel containing the syntax errors, and set gutter marks for each error."""
         output_view = self.view.window().create_output_panel('gotools_lint_errors')
         output_view.set_scratch(True)
@@ -64,7 +66,13 @@ class GotoolsLint(sublime_plugin.TextCommand):
             m = re.search(file_regex, line)
             if m:
                 line = os.path.join(dir_name, line)
+
+                if include_other_files and file_name not in line:
+                    continue
             lines.append(line)
+
+        if not any(lines):
+            return False
 
         syntax_output = '\n'.join(lines)
         output_view.run_command('append', {'characters': header + '\n' + syntax_output})
@@ -87,3 +95,5 @@ class GotoolsLint(sublime_plugin.TextCommand):
 
         if len(marks) > 0:
             self.view.add_regions("GotoolsLint", marks, "source.go", "dot", sublime.DRAW_STIPPLED_UNDERLINE | sublime.PERSISTENT)
+
+        return True
