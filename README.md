@@ -4,6 +4,16 @@ GoTools is a [Go programming language](http://www.golang.org) plugin for [Sublim
 
 **Please note** that the project is still considered a pre-release alpha/personal project and no effort is being made to maintain compatibility with any old settings or environments.
 
+## Changes from upstream
+
+I (nuance) have made a series of small changes to [GoTools](https://github.com/ironcladlou/GoTools) in order to replace my usage of [GoSublime](https://github.com/DisposaBoy/GoSublime).
+
+- Added snippets to autocomplete results in gotools_suggestions. This gives you access to argument names for suggested functions, with tab-complete for replacement.
+- Added type information about the current symbol to the status bar (on the bottom left of the window). This is resolved using a query to gocode for completions starting at the end of what sublime thinks is the current symbol.
+- Removed build / test integration in favor of [golang/sublime-build](https://github.com/golang/sublime-build).
+- Removed the custom language definition in favor of the improved built-in.
+- Added golint / go vet support. Currently run on save.
+
 ## Features
 
 * Jump to symbol/declaration (using your choice of [oracle](https://godoc.org/golang.org/x/tools/oracle) or [godef](https://github.com/rogpeppe/godef))
