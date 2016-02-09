@@ -121,6 +121,10 @@ class GoToolsSettings():
     return self.get_setting("debug_enabled")
 
   @property
+  def lint_on_save(self):
+    return self.get_setting("lint_on_save")
+
+  @property
   def format_on_save(self):
     return self.get_setting("format_on_save")
 

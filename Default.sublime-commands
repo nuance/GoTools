@@ -8,6 +8,10 @@
     "command": "gotools_format"
   },
   {
+    "caption": "GoTools: Lint",
+    "command": "gotools_lint"
+  },
+  {
     "caption": "GoTools: Rename",
     "command": "gotools_rename"
   },
