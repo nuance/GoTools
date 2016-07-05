@@ -1,17 +1,18 @@
 import sublime
 import sublime_plugin
+import os
+import golangconfig
 import re
 
 from .gotools_util import Buffers
 from .gotools_util import GoBuffers
 from .gotools_util import Logger
 from .gotools_util import ToolRunner
-from .gotools_settings import GoToolsSettings
 
 class GotoolsFormatOnSave(sublime_plugin.EventListener):
   def on_pre_save(self, view):
     if not GoBuffers.is_go_source(view): return
-    if not GoToolsSettings.get().format_on_save: return
+    if not golangconfig.setting_value("format_on_save")[0]: return
     view.run_command('gotools_format')
 
 class GotoolsFormat(sublime_plugin.TextCommand):
@@ -21,14 +22,14 @@ class GotoolsFormat(sublime_plugin.TextCommand):
   def run(self, edit):
     command = ""
     args = []
-    if GoToolsSettings.get().format_backend == "gofmt":
+    if golangconfig.setting_value('format_backend')[0] == "gofmt":
       command = "gofmt"
       args = ["-e", "-s"]
-    elif GoToolsSettings.get().format_backend in ["goimports", "both"] :
+    elif golangconfig.setting_value('format_backend')[0] in ["goimports", "both"]:
       command = "goimports"
       args = ["-e"]
 
-    stdout, stderr, rc = ToolRunner.run(command, args, stdin=Buffers.buffer_text(self.view))
+    stdout, stderr, rc = ToolRunner.run(self.view, command, args, stdin=Buffers.buffer_text(self.view))
 
     # Clear previous syntax error marks
     self.view.erase_regions("mark")
@@ -43,10 +44,10 @@ class GotoolsFormat(sublime_plugin.TextCommand):
       Logger.log("unknown gofmt error (" + str(rc) + ") stderr:\n" + stderr)
       return
 
-    if GoToolsSettings.get().format_backend == "both":
+    if golangconfig.setting_value('format_backend')[0] == "both":
       command = "gofmt"
       args = ["-e", "-s"]
-      stdout, stderr, rc = ToolRunner.run(command, args, stdin=stdout.encode('utf-8'))
+      stdout, stderr, rc = ToolRunner.run(self.view, command, args, stdin=stdout.encode('utf-8'))
 
     # Clear previous syntax error marks
     self.view.erase_regions("mark")

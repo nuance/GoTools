@@ -6,9 +6,16 @@ from .gotools_util import Buffers
 from .gotools_util import GoBuffers
 from .gotools_util import Logger
 from .gotools_util import ToolRunner
-from .gotools_settings import GoToolsSettings
+
+import golangconfig
 
 class GotoolsOracleCommand(sublime_plugin.TextCommand):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        if self.is_enabled():
+            self.oracle = ToolRunner.prepare(self.view, 'oracle')
+
     def is_enabled(self):
         return GoBuffers.is_go_source(self.view)
 
@@ -24,12 +31,16 @@ class GotoolsOracleCommand(sublime_plugin.TextCommand):
         # configured.
         # TODO: put into a utility
         package_scope = []
-        for p in GoToolsSettings.get().build_packages:
-            package_scope.append(os.path.join(GoToolsSettings.get().project_package, p))
-        for p in GoToolsSettings.get().test_packages:
-            package_scope.append(os.path.join(GoToolsSettings.get().project_package, p))
-        for p in GoToolsSettings.get().tagged_test_packages:
-            package_scope.append(os.path.join(GoToolsSettings.get().project_package, p))
+        project_pkg = golangconfig.setting_value('project_package')[0] or ""
+        for p in golangconfig.setting_value('build_packages'):
+            if p:
+                package_scope.append(os.path.join(project_pkg, p))
+        for p in golangconfig.setting_value('test_packages'):
+            if p:
+                package_scope.append(os.path.join(project_pkg, p))
+        for p in golangconfig.setting_value('tagged_test_packages'):
+            if p:
+                package_scope.append(os.path.join(project_pkg, p))
 
         sublime.active_window().run_command("hide_panel", {"panel": "output.gotools_oracle"})
 
@@ -56,7 +67,7 @@ class GotoolsOracleCommand(sublime_plugin.TextCommand):
         args = ["-pos=" + pos, "-format=plain", mode]
         if len(package_scope) > 0:
             args = args + package_scope
-        output, err, rc = ToolRunner.run("oracle", args, timeout=60)
+        output, err, rc = ToolRunner.run_prepared(self.oracle, args, timeout=60)
         Logger.log("oracle " + mode + " output: " + output.rstrip())
 
         if rc != 0:

@@ -6,9 +6,12 @@ from .gotools_util import Buffers
 from .gotools_util import GoBuffers
 from .gotools_util import Logger
 from .gotools_util import ToolRunner
-from .gotools_settings import GoToolsSettings
 
 class GotoolsRenameCommand(sublime_plugin.TextCommand):
+  def __init__(self, *args, **kwargs):
+    super().__init__(*args, **kwargs)
+    self.gorename = ToolRunner.prepare(self.view, 'gorename')
+
   def is_enabled(self):
     return GoBuffers.is_go_source(self.view)
 
@@ -25,7 +28,7 @@ class GotoolsRenameCommand(sublime_plugin.TextCommand):
       "-to", name,
       "-v"
     ]
-    output, err, exit = ToolRunner.run("gorename", args, timeout=15)
+    output, err, exit = ToolRunner.run_prepared(self.gorename, args, timeout=15)
 
     if exit != 0:
       Logger.status("rename failed ({0}): {1}".format(exit, err))

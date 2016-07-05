@@ -6,7 +6,9 @@ from .gotools_util import Buffers
 from .gotools_util import GoBuffers
 from .gotools_util import Logger
 from .gotools_util import ToolRunner
-from .gotools_settings import GoToolsSettings
+
+import golangconfig
+
 
 def _lex_func_type(typ):
   """Convert a function type into list of arguments and return value names"""
@@ -41,7 +43,14 @@ def _lex_func_type(typ):
 
   return args, returns
 
-class GotoolsSuggestions(sublime_plugin.EventListener):
+class GotoolsSuggestions(sublime_plugin.ViewEventListener):
+  @classmethod
+  def is_applicable(cls, settings):
+    return settings.get('syntax') == 'Packages/GoTools/GoTools.tmLanguage'
+
+  def __init__(self, view):
+    self.view = view
+
   CLASS_SYMBOLS = {
     "func": "ƒ",
     "var": "ν",
@@ -49,12 +58,12 @@ class GotoolsSuggestions(sublime_plugin.EventListener):
     "package": "ρ"
   }
 
-  def on_query_completions(self, view, prefix, locations):
-    if not GoBuffers.is_go_source(view) or not GoToolsSettings.get().autocomplete:
+  def on_query_completions(self, prefix, locations):
+    if not GoBuffers.is_go_source(self.view) or not golangconfig.setting_value('autocomplete')[0]:
       return
 
-    suggestions_json_str, stderr, rc = ToolRunner.run("gocode", ["-f=json", "autocomplete", 
-      str(Buffers.offset_at_cursor(view)[0])], stdin=Buffers.buffer_text(view))
+    suggestions_json_str, stderr, rc = ToolRunner.run(self.view, "gocode", ["-f=json", "autocomplete", 
+      str(Buffers.offset_at_cursor(self.view)[0])], stdin=Buffers.buffer_text(self.view))
 
     suggestions_json = json.loads(suggestions_json_str)
 

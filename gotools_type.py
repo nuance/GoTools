@@ -3,34 +3,37 @@ import sublime_plugin
 import json
 
 from .gotools_util import Buffers
-from .gotools_util import GoBuffers
-from .gotools_util import Logger
 from .gotools_util import ToolRunner
-from .gotools_settings import GoToolsSettings
 
 
-class GotoolsShowTypeCommand(sublime_plugin.EventListener):
-  def __init__(self):
+class GotoolsShowTypeCommand(sublime_plugin.ViewEventListener):
+  @classmethod
+  def is_applicable(cls, settings):
+    return settings.get('syntax') == 'Packages/GoTools/GoTools.tmLanguage'
+
+  def __init__(self, view):
     self.offset = None
+    self.view = view
+    self.phantom_set = sublime.PhantomSet(view)
 
-  def on_selection_modified_async(self, view):
-    if not GoBuffers.is_go_source(view):
+    self.gocode = ToolRunner.prepare(view, 'gocode')
+
+  def on_selection_modified_async(self):
+    start, end = Buffers.symbol_offset_at_cursor(self.view)
+    if end == self.offset:
       return
+    self.offset = end
 
-    offset = Buffers.symbol_offset_at_cursor(view)
-    if offset == self.offset:
-      return
-    self.offset = offset
-
-    suggestions_json_str, stderr, rc = ToolRunner.run("gocode", ["-f=json", "autocomplete", 
-      str(offset)], stdin=Buffers.buffer_text(view))
+    suggestions_json_str, stderr, rc = ToolRunner.run_prepared(self.gocode, ["-f=json", "autocomplete", 
+      str(end)], stdin=Buffers.buffer_text(self.view))
 
     parts = json.loads(suggestions_json_str)
     typ = ''
     if parts and parts[1]:
-      name = view.substr(view.word(view.sel()[0]))
+      name = self.view.substr(self.view.word(self.view.sel()[0]))
       exact = [p for p in parts[1] if p['name'] == name]
       if exact:
-        typ = '{0}: {1}'.format(name, exact[0]["type"])
+        typ = exact[0]["type"]
 
-    view.set_status("Gotools.show_type", typ)
+    phantoms = [sublime.Phantom(sublime.Region(start, start), typ, sublime.LAYOUT_BELOW)] if typ else []
+    self.phantom_set.update(phantoms)

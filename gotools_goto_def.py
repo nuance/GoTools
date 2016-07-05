@@ -7,7 +7,8 @@ from .gotools_util import Buffers
 from .gotools_util import GoBuffers
 from .gotools_util import Logger
 from .gotools_util import ToolRunner
-from .gotools_settings import GoToolsSettings
+
+import golangconfig
 
 class GotoolsGotoDef(sublime_plugin.TextCommand):
   def is_enabled(self):
@@ -18,9 +19,6 @@ class GotoolsGotoDef(sublime_plugin.TextCommand):
     return True
 
   def run(self, edit, event=None):
-    sublime.set_timeout_async(lambda: self.godef(event), 0)
-
-  def godef(self, event):
     # Find and store the current filename and byte offset at the
     # cursor or mouse event location.
     if event:
@@ -28,7 +26,7 @@ class GotoolsGotoDef(sublime_plugin.TextCommand):
     else:
       filename, row, col, offset, offset_end = Buffers.location_at_cursor(self.view)
 
-    backend = GoToolsSettings.get().goto_def_backend if GoToolsSettings.get().goto_def_backend else ""
+    backend = golangconfig.setting_value('goto_def_backend')[0] or "godef"
     try:
       if backend == "oracle":
         file, row, col = self.get_oracle_location(filename, offset)
@@ -61,17 +59,17 @@ class GotoolsGotoDef(sublime_plugin.TextCommand):
     # configured.
     # TODO: put into a utility
     package_scope = []
-    for p in GoToolsSettings.get().build_packages:
-      package_scope.append(os.path.join(GoToolsSettings.get().project_package, p))
-    for p in GoToolsSettings.get().test_packages:
-      package_scope.append(os.path.join(GoToolsSettings.get().project_package, p))
-    for p in GoToolsSettings.get().tagged_test_packages:
-      package_scope.append(os.path.join(GoToolsSettings.get().project_package, p))
+    for p in golangconfig.setting_value('build_packages')[0]:
+      package_scope.append(os.path.join(golangconfig.setting_value('project_package')[0], p))
+    for p in golangconfig.setting_value('test_packages')[0]:
+      package_scope.append(os.path.join(golangconfig.setting_value('project_package')[0], p))
+    for p in golangconfig.setting_value('tagged_test_packages')[0]:
+      package_scope.append(os.path.join(golangconfig.setting_value('project_package')[0], p))
 
     if len(package_scope) > 0:
       args = args + package_scope
 
-    location, err, rc = ToolRunner.run("oracle", args)
+    location, err, rc = ToolRunner.run(self.view, "oracle", args)
     if rc != 0:
       raise Exception("no definition found")
 
@@ -90,7 +88,7 @@ class GotoolsGotoDef(sublime_plugin.TextCommand):
     return [file, row, col]
 
   def get_godef_location(self, filename, offset):
-    location, err, rc = ToolRunner.run("godef", ["-f", filename, "-o", str(offset)])
+    location, err, rc = ToolRunner.run(self.view, "godef", ["-f", filename, "-o", str(offset)])
     if rc != 0:
       raise Exception("no definition found")
 
