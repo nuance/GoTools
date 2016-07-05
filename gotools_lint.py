@@ -9,15 +9,6 @@ from .gotools_util import Logger
 from .gotools_util import ToolRunner
 from .gotools_settings import GoToolsSettings
 
-
-class GotoolsLintOnSave(sublime_plugin.EventListener):
-    def on_post_save_async(self, view):
-        if not GoBuffers.is_go_source(view):
-            return
-        if not GoToolsSettings.get().lint_on_save:
-            return
-        view.run_command('gotools_lint', False)
-
 LINTERS = [
     # ('go', ['install', '-v'], "^(.*\.go):(\d+):(\d+):(.*)$", lambda ll: ll['rc'] == 1, lambda stderr, stdout: stderr),
     ('go', ['vet'], "^(.*\.go):(\d+):(.*)$", lambda ll: ll['rc'] == 1, lambda stderr, stdout: stderr),
@@ -25,20 +16,28 @@ LINTERS = [
 ]
 
 
-class GotoolsLint(sublime_plugin.TextCommand):
-    def is_enabled(self):
-        return GoBuffers.is_go_source(self.view)
+class GotoolsLint(sublime_plugin.ViewEventListener):
+    @classmethod
+    def is_applicable(cls, settings):
+        return settings.get('syntax') == 'Packages/GoTools/GoTools.tmLanguage'
 
-    def run(self, edit, include_other_files=True):
+    def __init__(self, view):
+        self.view = view
+        self.phantom_set = sublime.PhantomSet(view)
+
+        self.timeout_scheduled = False
+        self.needs_update = False
+
+    def on_post_save_async(self):
+        phantoms = []
         for l in LINTERS:
-            self._run_cmd_or_fail(*l, **{'include_other_files': include_other_files})
+            phantoms.extend(self._run_cmd_or_fail(*l, **{'include_other_files': False}))
+
+        self.phantom_set.update(phantoms)
 
     def _run_cmd_or_fail(self, cmd, args, file_regex, failure_test, failures, include_other_files):
         path = os.path.dirname(self.view.file_name())
         stdout, stderr, rc = ToolRunner.run(cmd, args, cwd=path)
-
-        # Clear previous syntax error marks
-        self.view.erase_regions("GotoolsLint")
 
         if failure_test(locals()):
             # Show syntax errors and bail
@@ -46,9 +45,6 @@ class GotoolsLint(sublime_plugin.TextCommand):
                                            failures(stderr, stdout),
                                            file_regex,
                                            include_other_files)
-
-        # Everything's good, hide the syntax error panel
-        self.view.window().run_command("hide_panel", {"panel": "output.gotools_lint_errors"})
 
     def show_syntax_errors(self, header, stderr, file_regex, include_other_files):
         """Display an output panel containing the syntax errors, and set gutter marks for each error."""
@@ -66,19 +62,9 @@ class GotoolsLint(sublime_plugin.TextCommand):
             lines.append(line)
 
         if not any(lines):
-            return False
+            return []
 
-        output_view = self.view.window().create_output_panel('gotools_lint_errors')
-        output_view.set_scratch(True)
-        output_view.settings().set("result_file_regex", file_regex)
-        output_view.run_command("select_all")
-        output_view.run_command("right_delete")
-
-        syntax_output = '\n'.join(lines)
-        output_view.run_command('append', {'characters': header + '\n' + syntax_output})
-        self.view.window().run_command("show_panel", {"panel": "output.gotools_lint_errors"})
-
-        marks = []
+        phantoms = []
         for error in stderr.splitlines():
             if file_name not in error:
                 continue
@@ -90,10 +76,7 @@ class GotoolsLint(sublime_plugin.TextCommand):
 
             row = int(match.group(2))
             pt = self.view.text_point(row - 1, 0)
-            Logger.log("adding mark at row " + str(row))
-            marks.append(sublime.Region(pt))
+            phantoms.append(sublime.Phantom(sublime.Region(pt), error, sublime.LAYOUT_INLINE))
+            print(phantoms[-1])
 
-        if len(marks) > 0:
-            self.view.add_regions("GotoolsLint", marks, "source.go", "dot", sublime.DRAW_STIPPLED_UNDERLINE | sublime.PERSISTENT)
-
-        return True
+        return phantoms
