@@ -43,13 +43,10 @@ def _lex_func_type(typ):
 
   return args, returns
 
-class GotoolsSuggestions(sublime_plugin.ViewEventListener):
+class GotoolsSuggestions(sublime_plugin.EventListener):
   @classmethod
   def is_applicable(cls, settings):
     return settings.get('syntax') == 'Packages/GoTools/GoTools.tmLanguage'
-
-  def __init__(self, view):
-    self.view = view
 
   CLASS_SYMBOLS = {
     "func": "ƒ",
@@ -58,12 +55,12 @@ class GotoolsSuggestions(sublime_plugin.ViewEventListener):
     "package": "ρ"
   }
 
-  def on_query_completions(self, prefix, locations):
-    if not GoBuffers.is_go_source(self.view) or not golangconfig.setting_value('autocomplete')[0]:
-      return
+  def on_query_completions(self, view, prefix, locations):
+    if not self.is_applicable(view.settings()):
+        return
 
-    suggestions_json_str, stderr, rc = ToolRunner.run(self.view, "gocode", ["-f=json", "autocomplete", 
-      str(Buffers.offset_at_cursor(self.view)[0])], stdin=Buffers.buffer_text(self.view))
+    suggestions_json_str, stderr, rc = ToolRunner.run(view, "gocode", ["-f=json", "autocomplete", 
+      str(Buffers.offset_at_cursor(view)[0])], stdin=Buffers.buffer_text(view))
 
     suggestions_json = json.loads(suggestions_json_str)
 

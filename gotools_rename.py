@@ -10,7 +10,9 @@ from .gotools_util import ToolRunner
 class GotoolsRenameCommand(sublime_plugin.TextCommand):
   def __init__(self, *args, **kwargs):
     super().__init__(*args, **kwargs)
-    self.gorename = ToolRunner.prepare(self.view, 'gorename')
+
+    if self.is_enabled():
+        self.gorename = ToolRunner.prepare(self.view, 'gorename')
 
   def is_enabled(self):
     return GoBuffers.is_go_source(self.view)

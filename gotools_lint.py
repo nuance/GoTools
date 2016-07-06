@@ -9,8 +9,8 @@ from .gotools_util import ToolRunner
 
 LINTERS = [
     # ('go', ['install', '-v'], "^(.*\.go):(\d+):(\d+):(.*)$", lambda ll: ll['rc'] == 1, lambda stderr, stdout: stderr),
-    ('go', ['vet'], "^(.*\.go):(\d+):(.*)$", lambda ll: ll['rc'] == 1, lambda stderr, stdout: stderr),
-    ('golint', [], "^(.*\.go):(\d+):(\d+):(.*)$", lambda ll: len(ll['stdout']) > 0, lambda stderr, stdout: stdout),
+    ('go', ['vet'], "^(.*\.go):(\d+):(\d+:)?(.*)$", lambda ll: ll['rc'] == 1, lambda stderr, stdout: stderr),
+    ('golint', [], "^(.*\.go):(\d+):(\d+:)(.*)$", lambda ll: len(ll['stdout']) > 0, lambda stderr, stdout: stdout),
 ]
 
 
@@ -42,8 +42,6 @@ class GotoolsLint(sublime_plugin.ViewEventListener):
             sublime.set_timeout_async(self.lint, 500)
             return
 
-        print('linting ' + self.view.file_name())
-
         phantoms = []
         for l in LINTERS:
             phantoms.extend(self._run_cmd_or_fail(*l, **{'include_other_files': False}))
@@ -66,20 +64,6 @@ class GotoolsLint(sublime_plugin.ViewEventListener):
     def show_syntax_errors(self, header, stderr, file_regex, include_other_files):
         """Display an output panel containing the syntax errors, and set gutter marks for each error."""
         file_name = os.path.basename(self.view.file_name())
-        dir_name = os.path.dirname(self.view.file_name())
-
-        lines = []
-        for line in stderr.split('\n'):
-            m = re.search(file_regex, line)
-            if m:
-                line = os.path.join(dir_name, line)
-
-                if include_other_files and file_name not in line:
-                    continue
-            lines.append(line)
-
-        if not any(lines):
-            return []
 
         phantoms = []
         for error in stderr.splitlines():
@@ -87,6 +71,7 @@ class GotoolsLint(sublime_plugin.ViewEventListener):
                 continue
 
             match = re.match(file_regex, error)
+            print(match.groups())
             if not match or not match.group(2):
                 Logger.log("skipping unrecognizable error:\n" + error + "\nmatch:" + str(match))
                 continue
@@ -94,7 +79,7 @@ class GotoolsLint(sublime_plugin.ViewEventListener):
             row = int(match.group(2)) - 1
             column = 0
             if len(match.groups()) == 4:
-                column = int(match.group(3)) - 1
+                column = int(match.group(3)[:-1]) - 1
 
             error = '<div class="warning">^ {}</div>'.format(match.groups()[-1].strip())
 

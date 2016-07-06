@@ -10,97 +10,84 @@ from .gotools_util import Logger
 from .gotools_util import ToolRunner
 
 class GotoolsFormatOnSave(sublime_plugin.EventListener):
-  def on_pre_save(self, view):
-    if not GoBuffers.is_go_source(view): return
-    if not golangconfig.setting_value("format_on_save")[0]: return
-    view.run_command('gotools_format')
+    def on_pre_save(self, view):
+        if not GoBuffers.is_go_source(view):
+            return
+        if not golangconfig.setting_value("format_on_save")[0]:
+            return
+        view.run_command('gotools_format')
 
 class GotoolsFormat(sublime_plugin.TextCommand):
-  def is_enabled(self):
-    return GoBuffers.is_go_source(self.view)
+    def __init__(self, view):
+        super().__init__(view)
+        self.phantom_set = sublime.PhantomSet(self.view)
 
-  def run(self, edit):
-    command = ""
-    args = []
-    if golangconfig.setting_value('format_backend')[0] == "gofmt":
-      command = "gofmt"
-      args = ["-e", "-s"]
-    elif golangconfig.setting_value('format_backend')[0] in ["goimports", "both"]:
-      command = "goimports"
-      args = ["-e"]
+    def is_enabled(self):
+        return GoBuffers.is_go_source(self.view)
 
-    stdout, stderr, rc = ToolRunner.run(self.view, command, args, stdin=Buffers.buffer_text(self.view))
+    def run(self, edit):
+        command = ""
+        args = []
+        if golangconfig.setting_value('format_backend')[0] == "gofmt":
+            command = "gofmt"
+            args = ["-e", "-s"]
+        elif golangconfig.setting_value('format_backend')[0] in ["goimports", "both"]:
+            command = "goimports"
+            args = ["-e"]
 
-    # Clear previous syntax error marks
-    self.view.erase_regions("mark")
+        stdout, stderr, rc = ToolRunner.run(self.view, command, args, stdin=Buffers.buffer_text(self.view))
 
-    if rc == 2:
-      # Show syntax errors and bail
-      self.show_syntax_errors(stderr)
-      return
+        # Clear previous syntax error marks
+        self.view.erase_regions("mark")
 
-    if rc != 0:
-      # Ermmm...
-      Logger.log("unknown gofmt error (" + str(rc) + ") stderr:\n" + stderr)
-      return
+        if rc == 2:
+            # Show syntax errors and bail
+            self.show_syntax_errors(stderr)
+            return
 
-    if golangconfig.setting_value('format_backend')[0] == "both":
-      command = "gofmt"
-      args = ["-e", "-s"]
-      stdout, stderr, rc = ToolRunner.run(self.view, command, args, stdin=stdout.encode('utf-8'))
+        if rc != 0:
+            # Ermmm...
+            Logger.log("unknown gofmt error (" + str(rc) + ") stderr:\n" + stderr)
+            self.phantom_set.update([])
+            return
 
-    # Clear previous syntax error marks
-    self.view.erase_regions("mark")
+        if golangconfig.setting_value('format_backend')[0] == "both":
+            command = "gofmt"
+            args = ["-e", "-s"]
+            stdout, stderr, rc = ToolRunner.run(self.view, command, args, stdin=stdout.encode('utf-8'))
 
-    if rc == 2:
-      # Show syntax errors and bail
-      self.show_syntax_errors(stderr)
-      return
+        # Clear previous syntax error marks
+        self.view.erase_regions("mark")
 
-    if rc != 0:
-      # Ermmm...
-      Logger.log("unknown gofmt error (" + str(rc) + ") stderr:\n" + stderr)
-      return
+        if rc == 2:
+            # Show syntax errors and bail
+            self.show_syntax_errors(stderr)
+            return
 
-    # Everything's good, hide the syntax error panel
-    self.view.window().run_command("hide_panel", {"panel": "output.gotools_syntax_errors"})
+        if rc != 0:
+            # Ermmm...
+            Logger.log("unknown gofmt error (" + str(rc) + ") stderr:\n" + stderr)
+            self.phantom_set.update([])
+            return
 
-    # Remember the viewport position. When replacing the buffer, Sublime likes to jitter the
-    # viewport around for some reason.
-    self.prev_viewport_pos = self.view.viewport_position()
+        # Everything's good, hide the syntax error panel
+        self.phantom_set.update([])
 
-    # Replace the buffer with gofmt output.
-    self.view.replace(edit, sublime.Region(0, self.view.size()), stdout)
+    # Display an output panel containing the syntax errors, and set gutter marks for each error.
+    def show_syntax_errors(self, stderr):
+        phantoms = []
+        for error in stderr.splitlines():
+            match = re.match("(.*):(\d+):(\d+):(.*)", error)
+            if not match or not match.group(2):
+                Logger.log("skipping unrecognizable error:\n" + error + "\nmatch:" + str(match))
+                continue
 
-    # Restore the viewport on the main GUI thread (which is the only way this works).
-    sublime.set_timeout(self.restore_viewport, 0)
+            row = int(match.group(2)) - 1
+            column = int(match.group(3)) - 1
 
-  def restore_viewport(self):
-    self.view.set_viewport_position(self.prev_viewport_pos, False)
+            error = '<div class="error">^ {}</div>'.format(match.group(4).strip())
 
-  # Display an output panel containing the syntax errors, and set gutter marks for each error.
-  def show_syntax_errors(self, stderr):
-    output_view = self.view.window().create_output_panel('gotools_syntax_errors')
-    output_view.set_scratch(True)
-    output_view.settings().set("result_file_regex","^(.*):(\d+):(\d+):(.*)$")
-    output_view.run_command("select_all")
-    output_view.run_command("right_delete")
+            pt = self.view.text_point(row, column)
+            phantoms.append(sublime.Phantom(sublime.Region(pt), error, sublime.LAYOUT_BELOW))
 
-    syntax_output = stderr.replace("<standard input>", self.view.file_name())
-    output_view.run_command('append', {'characters': syntax_output})
-    self.view.window().run_command("show_panel", {"panel": "output.gotools_syntax_errors"})
-
-    marks = []
-    for error in stderr.splitlines():
-      match = re.match("(.*):(\d+):(\d+):", error)
-      if not match or not match.group(2):
-        Logger.log("skipping unrecognizable error:\n" + error + "\nmatch:" + str(match))
-        continue
-
-      row = int(match.group(2))
-      pt = self.view.text_point(row-1, 0)
-      Logger.log("adding mark at row " + str(row))
-      marks.append(sublime.Region(pt))
-
-    if len(marks) > 0:
-      self.view.add_regions("mark", marks, "mark", "dot", sublime.DRAW_STIPPLED_UNDERLINE | sublime.PERSISTENT)
+        self.phantom_set.update(phantoms)
